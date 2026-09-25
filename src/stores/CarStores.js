@@ -1,4 +1,12 @@
-import { makeObservable, observable, action, computed, autorun, reaction, when } from "mobx";
+import {
+  makeObservable,
+  observable,
+  action,
+  computed,
+  autorun,
+  reaction,
+  when,
+} from "mobx";
 
 class CartStore {
   products = [
@@ -13,17 +21,18 @@ class CartStore {
 
   constructor() {
     const saveCart = localStorage.getItem("cart");
-    if(saveCart){
-        this.cart = JSON.parse(saveCart);
+    if (saveCart) {
+      this.cart = JSON.parse(saveCart);
     }
 
     makeObservable(this, {
       products: observable,
       cart: observable,
-      isLoading:observable,
-      error:observable,
-      fetchProducts:action,
-      addProduct:action,
+      isLoading: observable,
+      error: observable,
+      fetchProducts: action,
+      addProduct: action,
+      deleteProduct:action,
       addToCart: action,
       decreaseQuantity: action,
       clearCart: action,
@@ -33,69 +42,115 @@ class CartStore {
       totalPrize: computed,
     });
 
-    
-    autorun(()=>{
-        localStorage.setItem("cart",JSON.stringify(this.cart))
+    autorun(() => {
+      localStorage.setItem("cart", JSON.stringify(this.cart));
     });
 
     reaction(
-      ()=> this.totalItems,
-      (totalItems)=>{
+      () => this.totalItems,
+      (totalItems) => {
         console.log(`The prize of ${totalItems} is ${this.totalPrize}.`);
-      }
-    )
-    
-    
-    when(
-      ()=>this.products.length==0,
-      ()=>this.fetchProducts()
-    )
+      },
+    );
 
     when(
-      ()=>this.totalItems>10,
-      ()=>{
-        console.log("Its a Bulk Order.")
-      }
-    )
+      () => this.products.length == 0,
+      () => this.fetchProducts(),
+    );
+
+    when(
+      () => this.totalItems > 10,
+      () => {
+        console.log("Its a Bulk Order.");
+      },
+    );
   }
 
-  async fetchProducts(){
-    this.isLoading=true;
-    this.error=null;
-    try{
+  async fetchProducts() {
+    this.isLoading = true;
+    this.error = null;
+    try {
       const res = await fetch("https://fakestoreapi.com/products");
-      if(!res.ok){
+      if (!res.ok) {
         throw new Error("Failed to fetch Products");
-
       }
       const data = await res.json();
-      this.products=data;
-    }catch(err){
-      this.error= err.message;
+      this.products = data;
+    } catch (err) {
+      this.error = err.message;
       alert(this.error);
-    }finally{
-      this.isLoading=false;
+    } finally {
+      this.isLoading = false;
     }
   }
 
-  async addProduct(product){
+  async addProduct(product) {
     try {
-      this.isLoading=true;
-      const res = await fetch("https://fakestoreapi.com/products",{
-        method:"POST",
-        body: JSON.stringify(product)
-      })
+      this.isLoading = true;
+      const res = await fetch("https://fakestoreapi.com/products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(product),
+      });
 
-      if(!res.ok){
+      if (!res.ok) {
         throw new Error("Failed to add Product");
       }
       const data = await res.json();
       this.products.push(data);
+    } catch (err) {
+      this.error = err.message;
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  async deleteProduct(productId){
+   try{
+    this.isLoading=true;
+    this.error=null;
+
+    const res= await fetch(`https://fakestoreapi.com/products/${productId}`,{
+      method:"DELETE"
+    });
+    if(!res.ok){
+      throw new Error("Failed to delete the Product");
+    }
+    this.products=this.products.filter((product)=>product.id!==productId);
+   }catch(err){
+    this.error=err.message;
+   }
+   finally{
+    this.isLoading=false;
+   }
+
+  }
+  async updatedProduct(productId,price){
+    try{
+      this.isLoading=true;
+      this.error=null;
+
+      const item = this.products.find((item)=>item.id===productId);
+      const product= {...item,price:price};
+
+      const res = await fetch(`https://fakestoreapi.com/products/${productId}`,{
+        method:"PUT",
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(product)
+      })
+
+      if(!res){
+        throw new Error("Failed to Edit the Product");
+      }
+      const data=await res.json();
+      this.products=this.products.map((product)=>productId===product.id ? data:product);
     }catch(err){
       this.error=err.message;
     }
     finally{
-      this.loading=false;
+      this.isLoading=false;
     }
   }
 
@@ -108,7 +163,7 @@ class CartStore {
       const data = {
         id: product.id,
         title: product.title,
-        image:product.image,
+        image: product.image,
         price: product.price,
         description: product.description,
         quantity: 1,
@@ -159,7 +214,6 @@ class CartStore {
     }
     return false;
   }
-
 }
 
 const carStore = new CartStore();
